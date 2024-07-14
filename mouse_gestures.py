@@ -2,24 +2,18 @@ import sys
 import math
 import platform
 import time
-from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsView, QGraphicsScene, QGraphicsItem, QVBoxLayout, QPushButton, QTextEdit, QGraphicsPixmapItem
-from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal, QObject, QEvent, QPropertyAnimation
+from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsPixmapItem
+from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath, QPainter, QFont, QPixmap, QFontMetrics
 import pyautogui
 from pynput import mouse
 
-
 pyautogui.FAILSAFE = False
 
-
 IS_MACOS = platform.system() == "Darwin"
-
-
 COMMAND_KEY = "command" if IS_MACOS else "ctrl"
 PREVIOUS_KEY = "[" if IS_MACOS else "left"
 DELETE_KEY = "delete" if IS_MACOS else "del"
-
-
 DEBUG = True
 
 def debug_print(message):
@@ -33,9 +27,7 @@ class GlobalMouseTracker(QObject):
 
     def __init__(self):
         super().__init__()
-        self.listener = mouse.Listener(
-            on_click=self.on_click,
-            on_move=self.on_move)
+        self.listener = mouse.Listener(on_click=self.on_click, on_move=self.on_move)
         self.listener.start()
 
     def on_click(self, x, y, button, pressed):
@@ -66,23 +58,57 @@ class RadialMenuSlice(QGraphicsItem):
                       self.outer_radius * 2, self.outer_radius * 2)
 
     def paint(self, painter, option, widget):
+        # Enable anti-aliasing for smoother rendering
         painter.setRenderHint(QPainter.Antialiasing)
+
+        # Create a path for the shape
         path = QPainterPath()
-        path.moveTo(self.center + QPointF(self.inner_radius * math.cos(self.start_angle),
-                                          self.inner_radius * math.sin(self.start_angle)))
-        path.arcTo(self.boundingRect(), math.degrees(-self.start_angle), math.degrees(self.start_angle - self.end_angle))
-        path.arcTo(QRectF(self.center.x() - self.inner_radius, self.center.y() - self.inner_radius,
-                          self.inner_radius * 2, self.inner_radius * 2),
-                   math.degrees(-self.end_angle), math.degrees(self.end_angle - self.start_angle))
+        start_point = self.center + QPointF(
+            self.inner_radius * math.cos(self.start_angle),
+            self.inner_radius * math.sin(self.start_angle)
+        )
+        path.moveTo(start_point)
+        
+        # Create the outer arc
+        path.arcTo(
+            self.boundingRect(), 
+            math.degrees(-self.start_angle), 
+            math.degrees(self.start_angle - self.end_angle)
+        )
+        
+        # Create the inner arc
+        path.arcTo(
+            QRectF(
+                self.center.x() - self.inner_radius, 
+                self.center.y() - self.inner_radius,
+                self.inner_radius * 2, 
+                self.inner_radius * 2
+            ),
+            math.degrees(-self.end_angle), 
+            math.degrees(self.end_angle - self.start_angle)
+        )
+        
+        # Close the path
         path.closeSubpath()
 
+        # Set the brush color based on hover state
         painter.setBrush(self.hover_color if self.is_hovered else self.color)
         painter.setPen(Qt.NoPen)
         painter.drawPath(path)
 
+        # Draw a lighter neon blue border if hovered
         if self.is_hovered:
-            painter.setBrush(QBrush(Qt.white))
-            painter.drawEllipse(self.center, self.inner_radius - 5, self.inner_radius - 5)
+            border_color = QColor(0, 255, 255, 200)  # Neon blue color
+            painter.setPen(QPen(border_color, 2))  # 2-pixel wide border
+            painter.drawPath(path)
+            
+            # Draw a neon green inner ellipse
+            painter.setBrush(QBrush(QColor(0, 255, 0, 200)))  # Neon green color
+            painter.drawEllipse(
+                self.center, 
+                self.inner_radius - 5, 
+                self.inner_radius - 5
+            )
 
     def hoverEnterEvent(self, event):
         self.is_hovered = True
@@ -95,7 +121,6 @@ class RadialMenuSlice(QGraphicsItem):
 class RadialMenu(QDialog):
     def __init__(self):
         super().__init__()
-        # Set window flags to remove borders and make the window transparent
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("background: transparent;")
@@ -113,34 +138,32 @@ class RadialMenu(QDialog):
 
         cmd_key = "⌘" if IS_MACOS else "Ctrl+"
         self.actions = [
-            ("Select All + Copy", self.select_all_and_copy, f"{cmd_key}A + {cmd_key}C", "icons/select_all_copy.png"),
-            ("Redo", self.redo, f"{cmd_key}Y" if not IS_MACOS else "⇧{cmd_key}Z", "icons/redo.png"),
-            ("Next", self.next, "Alt+→", "icons/next.png"),
-            ("Copy", self.copy, f"{cmd_key}C", "icons/copy.png"),
-            ("Paste", self.paste, f"{cmd_key}V", "icons/paste.png"),
-            ("Cut", self.cut, f"{cmd_key}X", "icons/cut.png"),
-            ("Previous", self.previous, f"{cmd_key}[" if IS_MACOS else "Alt+←", "icons/previous.png"),
-            ("Undo", self.undo, f"{cmd_key}Z", "icons/undo.png"),
-            ("Select All", self.select_all, f"{cmd_key}A", "icons/select_all.png")
+            ("Select All + Copy", self.select_all_and_copy, f"{cmd_key}A + {cmd_key}C"),
+            ("Redo", self.redo, f"{cmd_key}Y" if not IS_MACOS else "⇧{cmd_key}Z"),
+            ("Next", self.next, "Alt+→"),
+            ("Copy", self.copy, f"{cmd_key}C"),
+            ("Paste", self.paste, f"{cmd_key}V"),
+            ("Cut", self.cut, f"{cmd_key}X"),
+            ("Undo", self.undo, f"{cmd_key}Z"),
+            ("Select All", self.select_all, f"{cmd_key}A")
         ]
 
         self.slices = []
         self.texts = []
-        self.icons = []
         self.selected = None
         self.center_item = None
         self.draw_menu()
 
     def draw_menu(self):
         center = QPointF(150, 150)
-        outer_radius = 120
-        inner_radius = 40
+        outer_radius = 150
+        inner_radius = 50
         start_angle = -math.pi / 2
 
-        for i, (action, _, shortcut, icon_path) in enumerate(self.actions):
+        for i, (action, _, shortcut) in enumerate(self.actions):
             end_angle = start_angle - 2 * math.pi / len(self.actions)
-            color = QColor(60, 60, 60, 180)
-            hover_color = QColor(100, 100, 255, 180)
+            color = QColor(30, 30, 30, 220)  # Dark Charcoal
+            hover_color = QColor(0, 100, 255, 180)  # Neon Blue
 
             slice_item = RadialMenuSlice(center, inner_radius, outer_radius, start_angle, end_angle, color, hover_color)
             self.scene.addItem(slice_item)
@@ -150,41 +173,31 @@ class RadialMenu(QDialog):
             text_radius = (inner_radius + outer_radius) / 2
             text_pos = center + QPointF(text_radius * math.cos(text_angle), text_radius * math.sin(text_angle))
 
-            # Create a text item for the action label
-            text_item = self.scene.addText("")
-            text_item.setDefaultTextColor(Qt.white)
-            text_item.setFont(QFont("Poppins", 6, QFont.Bold))
-            self.wrap_text_item(text_item, f"{action}", 50)
-            text_item.setPos(text_pos.x() - text_item.boundingRect().width() / 2,
-                             text_pos.y() - text_item.boundingRect().height() / 2)
-            text_item.setToolTip(action)  # Set tooltip to show full action label on hover
+            text_item = self.create_text_item(f"{action}", 6, Qt.white, text_pos, 50)
             self.texts.append(text_item)
 
-            # Create a text item for the shortcut label with smaller font
-            shortcut_item = self.scene.addText("")
-            shortcut_item.setDefaultTextColor(Qt.lightGray)
-            shortcut_item.setFont(QFont("Poppins", 5))
-            self.wrap_text_item(shortcut_item, f"{shortcut}", 50)
-            shortcut_item.setPos(text_pos.x() - shortcut_item.boundingRect().width() / 2,
-                                 text_pos.y() + text_item.boundingRect().height() / 2)
-            shortcut_item.setToolTip(shortcut)  # Set tooltip to show full shortcut on hover
+            shortcut_item = self.create_text_item(f"{shortcut}", 5, Qt.lightGray, text_pos, 50, adjust_y=text_item.boundingRect().height() / 2)
             self.texts.append(shortcut_item)
-
-            # Create an icon item
-            icon_item = QGraphicsPixmapItem(QPixmap(icon_path))
-            icon_item.setPos(text_pos.x() - 10, text_pos.y() - 25)  # Adjust position
-            self.scene.addItem(icon_item)
-            self.icons.append(icon_item)
 
             start_angle = end_angle
 
-        # Add center circle
         self.center_item = self.scene.addEllipse(center.x() - inner_radius, center.y() - inner_radius,
                                                  inner_radius * 2, inner_radius * 2,
-                                                 QPen(Qt.NoPen), QBrush(QColor(30, 30, 30, 200)))
+                                                 QPen(Qt.NoPen), QBrush(QColor(0, 0, 0, 200)))  # Black
+
+    def create_text_item(self, text, font_size, color, position, max_width=60, adjust_y=0):
+        font = QFont("Poppins", font_size, QFont.Bold if font_size == 6 else QFont.Normal)
+        text_item = self.scene.addText("")
+        text_item.setDefaultTextColor(color)
+        text_item.setFont(font)
+        self.wrap_text_item(text_item, text, max_width)
+        text_item.setPos(position.x() - text_item.boundingRect().width() / 2,
+                         position.y() - text_item.boundingRect().height() / 2 + adjust_y)
+        text_item.setToolTip(text)
+        return text_item
+
 
     def wrap_text_item(self, text_item, text, max_width=60):
-        """Wrap text to fit within the specified width."""
         font_metrics = QFontMetrics(text_item.font())
         wrapped_text = ""
         for line in text.split('\n'):
@@ -203,8 +216,8 @@ class RadialMenu(QDialog):
         center = QPointF(150, 150)
         vector = pos - center
         distance = (vector.x()**2 + vector.y()**2)**0.5
-        
-        if distance < 40:  # Dead zone
+
+        if distance < 40:
             self.selected = None
             self.update_visuals()
             return
@@ -214,7 +227,7 @@ class RadialMenu(QDialog):
             angle += 2 * math.pi
 
         index = int(len(self.actions) * angle / (2 * math.pi))
-        index = (index - 2) % len(self.actions)  # Adjust for starting at 12 o'clock position
+        index = (index - 2) % len(self.actions)
         
         if self.selected != index:
             self.selected = index
@@ -226,7 +239,7 @@ class RadialMenu(QDialog):
             slice_item.is_hovered = (i == self.selected)
             slice_item.update()
 
-        self.center_item.setBrush(QBrush(QColor(100, 100, 255, 200) if self.selected is not None else QColor(30, 30, 30, 200)))
+        self.center_item.setBrush(QBrush(QColor(0, 100, 255, 200) if self.selected is not None else QColor(0, 0, 0, 200)))  # Neon Blue or Black
 
     def show_at(self, x, y):
         self.move(int(x) - 150, int(y) - 150)
@@ -240,48 +253,28 @@ class RadialMenu(QDialog):
         return None
 
     def select_all(self):
-        debug_print("Executing: Select All")
-        pyautogui.keyDown(COMMAND_KEY)
-        time.sleep(0.1)
-        pyautogui.press('a')
-        pyautogui.keyUp(COMMAND_KEY)
+        self.perform_keystroke('a')
 
     def copy(self):
-        debug_print("Executing: Copy")
-        pyautogui.keyDown(COMMAND_KEY)
-        time.sleep(0.1)
-        pyautogui.press('c')
-        pyautogui.keyUp(COMMAND_KEY)
+        self.perform_keystroke('c')
 
     def select_all_and_copy(self):
-        debug_print("Executing: Select All + Copy")
         self.select_all()
-        QTimer.singleShot(100, self.copy)  # Add a small delay to ensure the select all completes
+        QTimer.singleShot(100, self.copy)
 
     def paste(self):
-        debug_print("Executing: Paste")
-        pyautogui.keyDown(COMMAND_KEY)
-        time.sleep(0.1)
-        pyautogui.press('v')
-        pyautogui.keyUp(COMMAND_KEY)
+        self.perform_keystroke('v')
 
     def cut(self):
-        debug_print("Executing: Cut")
-        pyautogui.keyDown(COMMAND_KEY)
-        time.sleep(0.1)
-        pyautogui.press('x')
-        pyautogui.keyUp(COMMAND_KEY)
+        self.perform_keystroke('x')
 
     def delete(self):
-        debug_print("Executing: Delete")
         pyautogui.press(DELETE_KEY)
 
     def next(self):
-        debug_print("Executing: Next")
         pyautogui.hotkey('alt', 'right')
 
     def previous(self):
-        debug_print("Executing: Previous")
         if IS_MACOS:
             pyautogui.keyDown(COMMAND_KEY)
             time.sleep(0.1)
@@ -291,14 +284,9 @@ class RadialMenu(QDialog):
             pyautogui.hotkey('alt', PREVIOUS_KEY)
 
     def undo(self):
-        debug_print("Executing: Undo")
-        pyautogui.keyDown(COMMAND_KEY)
-        time.sleep(0.1)
-        pyautogui.press('z')
-        pyautogui.keyUp(COMMAND_KEY)
+        self.perform_keystroke('z')
 
     def redo(self):
-        debug_print("Executing: Redo")
         if IS_MACOS:
             pyautogui.keyDown(COMMAND_KEY)
             pyautogui.keyDown('shift')
@@ -307,11 +295,14 @@ class RadialMenu(QDialog):
             pyautogui.keyUp('shift')
             pyautogui.keyUp(COMMAND_KEY)
         else:
-            pyautogui.keyDown(COMMAND_KEY)
-            time.sleep(0.1)
-            pyautogui.press('y')
-            pyautogui.keyUp(COMMAND_KEY)
+            self.perform_keystroke('y')
 
+    def perform_keystroke(self, key):
+        pyautogui.keyDown(COMMAND_KEY)
+        time.sleep(0.1)
+        pyautogui.press(key)
+        pyautogui.keyUp(COMMAND_KEY)
+        debug_print(f"Executing: {key.upper()}")
 
 class EnhancedRightClick(QObject):
     def __init__(self):
@@ -337,20 +328,16 @@ class EnhancedRightClick(QObject):
     def on_mouse_pressed(self, x, y):
         debug_print(f"Mouse pressed at ({x}, {y})")
         self.right_click_start = (x, y)
-        self.hold_timer.start(self.hold_threshold)  # Start the hold timer
+        self.hold_timer.start(self.hold_threshold)
 
     def on_mouse_released(self, x, y):
         debug_print(f"Mouse released at ({x}, {y})")
-        self.hold_timer.stop()  # Stop the hold timer
+        self.hold_timer.stop()
         if self.radial_menu.isVisible():
             action = self.radial_menu.get_selected_action()
             self.radial_menu.hide()
-            debug_print("Radial menu hidden")
             if action:
-                debug_print("Executing selected action")
                 QTimer.singleShot(10, action)
-            else:
-                debug_print("No action to execute")
         self.right_click_start = None
         self.is_dragging = False
 
@@ -364,7 +351,6 @@ class EnhancedRightClick(QObject):
         if self.right_click_start:
             x, y = self.right_click_start
             self.is_dragging = True
-            debug_print("Showing radial menu")
             self.radial_menu.show_at(x, y)
 
 if __name__ == "__main__":
