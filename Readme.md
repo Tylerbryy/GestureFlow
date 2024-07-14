@@ -40,7 +40,6 @@ To build the executable yourself:
 
 **Note:** If you encounter any issues with PyQt6, you can exclude it from the build.
 
-Additionally, a pre-built executable is included in the `dist` folder for your convenience.
 
 ## Contributing
 
