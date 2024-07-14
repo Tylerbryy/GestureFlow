@@ -4,22 +4,22 @@ import platform
 import time
 from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsView, QGraphicsScene, QGraphicsItem, QVBoxLayout, QPushButton, QTextEdit, QGraphicsPixmapItem
 from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal, QObject, QEvent, QPropertyAnimation
-from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath, QPainter, QFont, QPixmap
+from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath, QPainter, QFont, QPixmap, QFontMetrics
 import pyautogui
 from pynput import mouse
 
-# Disable PyAutoGUI fail-safe
+
 pyautogui.FAILSAFE = False
 
-# Detect the operating system
+
 IS_MACOS = platform.system() == "Darwin"
 
-# Define key mappings based on the OS
+
 COMMAND_KEY = "command" if IS_MACOS else "ctrl"
 PREVIOUS_KEY = "[" if IS_MACOS else "left"
 DELETE_KEY = "delete" if IS_MACOS else "del"
 
-# Debug mode for logging
+
 DEBUG = True
 
 def debug_print(message):
@@ -80,6 +80,10 @@ class RadialMenuSlice(QGraphicsItem):
         painter.setPen(Qt.NoPen)
         painter.drawPath(path)
 
+        if self.is_hovered:
+            painter.setBrush(QBrush(Qt.white))
+            painter.drawEllipse(self.center, self.inner_radius - 5, self.inner_radius - 5)
+
     def hoverEnterEvent(self, event):
         self.is_hovered = True
         self.update()
@@ -91,15 +95,17 @@ class RadialMenuSlice(QGraphicsItem):
 class RadialMenu(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # Set window flags to remove borders and make the window transparent
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
         self.setFixedSize(300, 300)
 
         self.view = QGraphicsView(self)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setStyleSheet("background: transparent;")
+        self.view.setStyleSheet("background: transparent; border: none;")
         self.view.setFixedSize(300, 300)
 
         self.scene = QGraphicsScene(0, 0, 300, 300)
@@ -135,7 +141,7 @@ class RadialMenu(QDialog):
             end_angle = start_angle - 2 * math.pi / len(self.actions)
             color = QColor(60, 60, 60, 180)
             hover_color = QColor(100, 100, 255, 180)
-            
+
             slice_item = RadialMenuSlice(center, inner_radius, outer_radius, start_angle, end_angle, color, hover_color)
             self.scene.addItem(slice_item)
             self.slices.append(slice_item)
@@ -144,15 +150,29 @@ class RadialMenu(QDialog):
             text_radius = (inner_radius + outer_radius) / 2
             text_pos = center + QPointF(text_radius * math.cos(text_angle), text_radius * math.sin(text_angle))
 
-            text_item = self.scene.addText(f"{action}\n{shortcut}")
+            # Create a text item for the action label
+            text_item = self.scene.addText("")
             text_item.setDefaultTextColor(Qt.white)
-            text_item.setFont(QFont("Arial", 8, QFont.Bold))
+            text_item.setFont(QFont("Poppins", 6, QFont.Bold))
+            self.wrap_text_item(text_item, f"{action}", 50)
             text_item.setPos(text_pos.x() - text_item.boundingRect().width() / 2,
                              text_pos.y() - text_item.boundingRect().height() / 2)
+            text_item.setToolTip(action)  # Set tooltip to show full action label on hover
             self.texts.append(text_item)
 
+            # Create a text item for the shortcut label with smaller font
+            shortcut_item = self.scene.addText("")
+            shortcut_item.setDefaultTextColor(Qt.lightGray)
+            shortcut_item.setFont(QFont("Poppins", 5))
+            self.wrap_text_item(shortcut_item, f"{shortcut}", 50)
+            shortcut_item.setPos(text_pos.x() - shortcut_item.boundingRect().width() / 2,
+                                 text_pos.y() + text_item.boundingRect().height() / 2)
+            shortcut_item.setToolTip(shortcut)  # Set tooltip to show full shortcut on hover
+            self.texts.append(shortcut_item)
+
+            # Create an icon item
             icon_item = QGraphicsPixmapItem(QPixmap(icon_path))
-            icon_item.setPos(text_pos.x() - 20, text_pos.y() - 40)  # Adjust position
+            icon_item.setPos(text_pos.x() - 10, text_pos.y() - 25)  # Adjust position
             self.scene.addItem(icon_item)
             self.icons.append(icon_item)
 
@@ -162,6 +182,22 @@ class RadialMenu(QDialog):
         self.center_item = self.scene.addEllipse(center.x() - inner_radius, center.y() - inner_radius,
                                                  inner_radius * 2, inner_radius * 2,
                                                  QPen(Qt.NoPen), QBrush(QColor(30, 30, 30, 200)))
+
+    def wrap_text_item(self, text_item, text, max_width=60):
+        """Wrap text to fit within the specified width."""
+        font_metrics = QFontMetrics(text_item.font())
+        wrapped_text = ""
+        for line in text.split('\n'):
+            wrapped_line = ""
+            for word in line.split():
+                test_line = wrapped_line + ("" if not wrapped_line else " ") + word
+                if font_metrics.width(test_line) > max_width:
+                    wrapped_text += wrapped_line + "\n"
+                    wrapped_line = word
+                else:
+                    wrapped_line = test_line
+            wrapped_text += wrapped_line + "\n"
+        text_item.setPlainText(wrapped_text.strip())
 
     def update_selection(self, pos):
         center = QPointF(150, 150)
@@ -276,6 +312,7 @@ class RadialMenu(QDialog):
             pyautogui.press('y')
             pyautogui.keyUp(COMMAND_KEY)
 
+
 class EnhancedRightClick(QObject):
     def __init__(self):
         super().__init__()
@@ -284,10 +321,14 @@ class EnhancedRightClick(QObject):
         self.mouse_tracker = GlobalMouseTracker()
         self.right_click_start = None
         self.is_dragging = False
+        self.hold_timer = QTimer()
+        self.hold_timer.setSingleShot(True)
+        self.hold_threshold = 200  # 200 ms hold threshold
 
         self.mouse_tracker.mouse_pressed.connect(self.on_mouse_pressed)
         self.mouse_tracker.mouse_released.connect(self.on_mouse_released)
         self.mouse_tracker.mouse_moved.connect(self.on_mouse_moved)
+        self.hold_timer.timeout.connect(self.on_hold_timeout)
 
     def start(self):
         debug_print(f"Enhanced Right-Click application started on {'macOS' if IS_MACOS else 'Windows'}")
@@ -295,14 +336,12 @@ class EnhancedRightClick(QObject):
 
     def on_mouse_pressed(self, x, y):
         debug_print(f"Mouse pressed at ({x}, {y})")
-        if not self.radial_menu.isVisible():
-            self.right_click_start = (x, y)
-            self.is_dragging = True
-            debug_print("Showing radial menu")
-            QTimer.singleShot(10, lambda: self.radial_menu.show_at(x, y))
+        self.right_click_start = (x, y)
+        self.hold_timer.start(self.hold_threshold)  # Start the hold timer
 
     def on_mouse_released(self, x, y):
         debug_print(f"Mouse released at ({x}, {y})")
+        self.hold_timer.stop()  # Stop the hold timer
         if self.radial_menu.isVisible():
             action = self.radial_menu.get_selected_action()
             self.radial_menu.hide()
@@ -312,14 +351,21 @@ class EnhancedRightClick(QObject):
                 QTimer.singleShot(10, action)
             else:
                 debug_print("No action to execute")
-            self.right_click_start = None
-            self.is_dragging = False
+        self.right_click_start = None
+        self.is_dragging = False
 
     def on_mouse_moved(self, x, y):
         if self.is_dragging and self.radial_menu.isVisible():
             local_x = x - self.right_click_start[0] + 150
             local_y = y - self.right_click_start[1] + 150
             self.radial_menu.update_selection(QPointF(local_x, local_y))
+
+    def on_hold_timeout(self):
+        if self.right_click_start:
+            x, y = self.right_click_start
+            self.is_dragging = True
+            debug_print("Showing radial menu")
+            self.radial_menu.show_at(x, y)
 
 if __name__ == "__main__":
     debug_print(f"Starting Enhanced Right-Click application on {'macOS' if IS_MACOS else 'Windows'}")
